@@ -1,0 +1,21 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel AutomataProcessor
+
+//cell struct
+struct Cell {
+    float previousState;
+    float currentState;
+};
+
+int2 gridSize;
+
+// cell buffer
+RWStructuredBuffer<Cell> cells;
+
+[numthreads(64,1,1)]
+void AutomataProcessor (uint3 id : SV_DispatchThreadID)
+{
+    float oldState = cells[id.x].currentState;
+    cells[id.x].currentState = cells[id.x].previousState;
+    cells[id.x].previousState = oldState;
+}

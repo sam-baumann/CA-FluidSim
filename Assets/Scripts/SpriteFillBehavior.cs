@@ -9,9 +9,23 @@ public class SpriteFillBehavior : MonoBehaviour
     [Range(0f, 1f)]
     public float fillAmount = 1f;
 
-    // Update is called once per frame
-    void Update()
+    public Vector2Int cellPosition;
+
+    public GridManagerBehavior gridManager;
+
+    public bool hasUpdated;
+
+    // Start is called before the first frame update
+    void Start()
     {
+        //get the grid manager
+        gridManager = transform.parent.parent.GetComponent<GridManagerBehavior>();
+    }
+
+    public void Draw()
+    {
+        //get the fill amount from the parent's Cells array
+        fillAmount = gridManager.cellArray[cellPosition.x + cellPosition.y * gridManager.gridSize.x].currentState;
         //if fill amount is over 1, set it to 1
         float adjustedFillAmount = fillAmount;
         if (adjustedFillAmount > 1) adjustedFillAmount = 1;

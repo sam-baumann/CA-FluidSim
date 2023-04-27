@@ -9,12 +9,29 @@ TODO:
  - Create compute shader to process the rules of the CA
 */
 
+public struct Cell {
+    public float previousState;
+    public float currentState;
+}
+
 public class GridManagerBehavior : MonoBehaviour
 {
     public GameObject cellPrefab;
     public GameObject sceneCamera;
 
     public GameObject[,] gridArray;
+    public Vector2Int gridSize;
+
+    public Cell[] cellArray;
+
+    public ComputeShader computeShader;
+
+    [SerializeField]
+    public int frameInterval = 1;
+
+    int kernel;
+    ComputeBuffer cellBuffer;
+    int frameCounter;
 
     // Start is called before the first frame update
     void Start()
@@ -24,6 +41,17 @@ public class GridManagerBehavior : MonoBehaviour
         int height = 2 * (int)camera.orthographicSize;
         int width = (int)((float)height * camera.aspect);
         gridArray = new GameObject[width, height];
+        cellArray = new Cell[width * height];
+        gridSize = new Vector2Int(width, height);
+
+        frameCounter = 0;
+
+        //create the compute shader and buffer
+        cellBuffer = new ComputeBuffer(cellArray.Length, sizeof(float) * 2);
+        cellBuffer.SetData(cellArray);
+        computeShader.SetBuffer(0, "cells", cellBuffer);
+        computeShader.SetVector("gridSize", new Vector4(width, height, 0, 0));
+        kernel = computeShader.FindKernel("AutomataProcessor");
 
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++)
@@ -34,9 +62,21 @@ public class GridManagerBehavior : MonoBehaviour
                 if (width % 2 == 0) screenX += .5f;
                 GameObject cell = Instantiate(cellPrefab, transform);
                 cell.transform.position = new Vector3(screenX, screenY, 0);
-                cell.transform.localScale = new Vector3(.9f, .9f, 1);
+                SpriteFillBehavior myFillBehavior = cell.GetComponentInChildren<SpriteFillBehavior>();
+                myFillBehavior.fillAmount = 0f;
+                myFillBehavior.cellPosition = new Vector2Int(x, y);
                 cell.name = "Cell " + x + ", " + y;
+
                 gridArray[x, y] = cell;
+
+                //create a new cell struct
+                Cell newCell = new Cell();
+                //set the previous state to 0
+                newCell.previousState = 1;
+                //set the current state to 0
+                newCell.currentState = 0;
+                //add that cell to the cell array
+                cellArray[x + y * width] = newCell;
             }
         }
     }
@@ -44,6 +84,30 @@ public class GridManagerBehavior : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        frameCounter++;
+        frameCounter %= frameInterval;
+        if (frameCounter != 0) return;
+        //run the compute shader
+        cellBuffer.SetData(cellArray);
+        computeShader.Dispatch(kernel, ((gridSize.x * gridSize.y) + 63) / 64, 1, 1);
+        cellBuffer.GetData(cellArray);
                 
+        //loop over all cells and draw them
+        foreach (GameObject cell in gridArray)
+        {
+            SpriteFillBehavior myFillBehavior = cell.GetComponentInChildren<SpriteFillBehavior>();
+            //handle the case where the cell has been clicked
+            if (myFillBehavior.hasUpdated){
+                myFillBehavior.hasUpdated = false;
+                cellArray[myFillBehavior.cellPosition.x + myFillBehavior.cellPosition.y * gridSize.x].currentState = myFillBehavior.fillAmount;
+                cellArray[myFillBehavior.cellPosition.x + myFillBehavior.cellPosition.y * gridSize.x].previousState = myFillBehavior.fillAmount;
+            }
+            myFillBehavior.Draw();
+        }
+    }
+
+    void OnDestroy()
+    {
+        cellBuffer.Release();
     }
 }
