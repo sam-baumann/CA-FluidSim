@@ -29,6 +29,9 @@ public class GridManagerBehavior : MonoBehaviour
     [SerializeField]
     public int frameInterval = 1;
 
+    [SerializeField]
+    public int cellCountMultiplier = 1;
+
     int kernel;
     ComputeBuffer cellBuffer;
     int frameCounter;
@@ -38,7 +41,7 @@ public class GridManagerBehavior : MonoBehaviour
     {
         //get the camera component
         Camera camera = sceneCamera.GetComponent<Camera>();
-        int height = 2 * (int)camera.orthographicSize;
+        int height = 2 * (int)camera.orthographicSize * cellCountMultiplier;
         int width = (int)((float)height * camera.aspect);
         gridArray = new GameObject[width, height];
         cellArray = new Cell[width * height];
@@ -50,20 +53,21 @@ public class GridManagerBehavior : MonoBehaviour
         cellBuffer = new ComputeBuffer(cellArray.Length, sizeof(float) * 2);
         cellBuffer.SetData(cellArray);
         computeShader.SetBuffer(0, "cells", cellBuffer);
-        computeShader.SetVector("gridSize", new Vector4(width, height, 0, 0));
+        computeShader.SetInt("width", width);
+        computeShader.SetInt("height", height);
         kernel = computeShader.FindKernel("AutomataProcessor");
 
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++)
             {
-                float screenX = -width / 2 + x;
-                float screenY = (float)(-height / 2 + y);
-                if (height % 2 == 0) screenY += .5f;
-                if (width % 2 == 0) screenX += .5f;
+                float screenX = (-width / 2 + x) / (float)cellCountMultiplier;
+                float screenY = (float)(-height / 2 + y) / (float)cellCountMultiplier;
+                if (height % 2 == 0) screenY += (.5f / (float)cellCountMultiplier);
+                if (width % 2 == 0) screenX += (.5f / (float)cellCountMultiplier);
                 GameObject cell = Instantiate(cellPrefab, transform);
                 cell.transform.position = new Vector3(screenX, screenY, 0);
+                cell.transform.localScale = new Vector3(1f / (float)cellCountMultiplier, 1f / (float)cellCountMultiplier, 1);
                 SpriteFillBehavior myFillBehavior = cell.GetComponentInChildren<SpriteFillBehavior>();
-                myFillBehavior.fillAmount = 0f;
                 myFillBehavior.cellPosition = new Vector2Int(x, y);
                 cell.name = "Cell " + x + ", " + y;
 
@@ -87,6 +91,11 @@ public class GridManagerBehavior : MonoBehaviour
         frameCounter++;
         frameCounter %= frameInterval;
         if (frameCounter != 0) return;
+        //move the current value to be the previous value
+        for (int i = 0; i < cellArray.Length; i++)
+        {
+            cellArray[i].previousState = cellArray[i].currentState;
+        }
         //run the compute shader
         cellBuffer.SetData(cellArray);
         computeShader.Dispatch(kernel, ((gridSize.x * gridSize.y) + 63) / 64, 1, 1);

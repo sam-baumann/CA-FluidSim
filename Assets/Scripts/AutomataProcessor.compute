@@ -7,15 +7,80 @@ struct Cell {
     float currentState;
 };
 
-int2 gridSize;
+uint width;
+uint height;
 
 // cell buffer
 RWStructuredBuffer<Cell> cells;
 
+float getUp(uint index) {
+    //if it is the top row, return 3
+    uint y = index / width;
+    if (y == height - 1) {
+        return 3;
+    }
+
+    return cells[index + width].previousState;
+}
+
+float getDown(uint index) {
+    //if it is the bottom row, return 3
+    uint y = index / width;
+    if (y == 0) {
+        return 3;
+    }
+
+    return cells[index - width].previousState;
+}
+
+float getLeft(uint index) {
+    //if it is the leftmost column, return 3
+    int x = index % width;
+    if (x == 0) {
+        return 3;
+    }
+
+    return cells[index - 1].previousState;
+}
+
+float getRight(uint index) {
+    //if it is the rightmost column, return 3
+    uint x = index % width;
+    if (x == width - 1) {
+        return 3;
+    }
+
+    return cells[index + 1].previousState;
+}
+
+//this shader should never change the value of previousState - only update CurrentState based on previousState
 [numthreads(64,1,1)]
 void AutomataProcessor (uint3 id : SV_DispatchThreadID)
 {
-    float oldState = cells[id.x].currentState;
-    cells[id.x].currentState = cells[id.x].previousState;
-    cells[id.x].previousState = oldState;
+    int index = id.x;
+    Cell cell = cells[index];
+    float state = cell.previousState;
+    float newState = state;
+
+    //here we simulate downward flow(from gravity)
+    float up = getUp(index);
+    float down = getDown(index);
+
+    //first if we are the cell that has the water
+    if (state > 0 && down < 1) {
+        newState = state - 1 + down;
+    }
+    //then if we are getting water put into us
+    if (state < 1 && up > 0 && up < 3) {
+        newState = state + up;
+    }
+    if (newState < 0) {
+        newState = 0;
+    }
+    if (newState > 2) {
+        newState = 2;
+    }
+
+    cells[index].currentState = newState;
 }
+
