@@ -1,5 +1,6 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel AutomataProcessor
+#pragma kernel AdvanceFlow
 
 //cell struct
 struct Cell {
@@ -7,11 +8,21 @@ struct Cell {
     float currentState;
 };
 
+struct flowDir {
+    float up;
+    float down;
+    float left;
+    float right;
+};
+
 uint width;
 uint height;
 
 // cell buffer
 RWStructuredBuffer<Cell> cells;
+RWStructuredBuffer<flowDir> prevFlowDirs;
+RWStructuredBuffer<flowDir> currFlowDirs;
+
 
 float getUp(uint index) {
     //if it is the top row, return 3
@@ -53,6 +64,37 @@ float getRight(uint index) {
     return cells[index + 1].previousState;
 }
 
+flowDir getIncomingFlow(uint index){
+    flowDir flow;
+    uint x = index % width;
+    uint y = index / width;
+    //first get the up cell's downward flow
+    if (y == height - 1) {
+        flow.up = 0;
+    } else {
+        flow.up = prevFlowDirs[index + width].down;
+    }
+    //then the down cell's upward flow
+    if (y == 0) {
+        flow.down = 0;
+    } else {
+        flow.down = prevFlowDirs[index - width].up;
+    }
+    //then the left cell's rightward flow
+    if (x == 0) {
+        flow.left = 0;
+    } else {
+        flow.left = prevFlowDirs[index - 1].right;
+    }
+    //then the right cell's leftward flow
+    if (x == width - 1) {
+        flow.right = 0;
+    } else {
+        flow.right = prevFlowDirs[index + 1].left;
+    }
+    return flow;
+}
+
 //this shader should never change the value of previousState - only update CurrentState based on previousState
 [numthreads(64,1,1)]
 void AutomataProcessor (uint3 id : SV_DispatchThreadID)
@@ -61,26 +103,84 @@ void AutomataProcessor (uint3 id : SV_DispatchThreadID)
     Cell cell = cells[index];
     float state = cell.previousState;
     float newState = state;
+    flowDir flow = prevFlowDirs[index];
 
-    //here we simulate downward flow(from gravity)
+    //sum the outward flow, decrease our state by that much
+    newState -= flow.up;
+    newState -= flow.down;
+    newState -= flow.left;
+    newState -= flow.right;
+
+    //sum the inward flow, increase our state by that much
+    flowDir incomingFlow = getIncomingFlow(index);
+    newState += incomingFlow.up;
+    newState += incomingFlow.down;
+    newState += incomingFlow.left;
+    newState += incomingFlow.right;
+
+    //clamp our new state value between 0 and 2
+    newState = clamp(newState, 0, 2);
+    
+    //get the cell contents in each direction
     float up = getUp(index);
     float down = getDown(index);
+    float left = getLeft(index);
+    float right = getRight(index);
 
-    //first if we are the cell that has the water
-    if (state > 0 && down < 1) {
-        newState = state - 1 + down;
-    }
-    //then if we are getting water put into us
-    if (state < 1 && up > 0 && up < 3) {
-        newState = state + up;
-    }
-    if (newState < 0) {
-        newState = 0;
-    }
-    if (newState > 2) {
-        newState = 2;
+    //now apply our automata rules
+    //first downward flow. If there's space to go down, we do so
+    bool flowingLeft;
+    bool flowingRight;
+    if (newState > 0){
+        if (down < 1) {
+            float space = 1 - down;
+            float flow = min(space, newState);
+            currFlowDirs[index].down = flow;
+        } else {
+            //now we see if we can do sideways flow
+            //if we can only go in 1 direction, we'll send about 30% of the cell's contents, or whatever the neighboring cell can take, whichever is smaller
+            //if we can go in 2 directions, we'll send about 20% of the cell's contents (each way), or whatever the neighboring cells can take, whichever is smaller
+            flowingLeft = left < newState; 
+            flowingRight = right < newState;
+            float flowAmount = 0.3;
+            if (flowingLeft && flowingRight) {
+                flowAmount = 0.2;
+            }
+            if (flowingLeft) {
+                float space = (newState - left) * flowAmount;
+                currFlowDirs[index].left = space;
+            }
+            if (flowingRight) {
+                float space = (newState - right) * flowAmount;
+                currFlowDirs[index].right = space;
+            }
+            if (!flowingLeft && !flowingRight) {
+                //finally, if we aren't able to go about the other rules, we see if we are overfilled, and if so we try to send some of our contents up.
+                bool overfilled = newState > 1;
+                if (overfilled) {
+                    float space = 1 - up;
+                    float flow = min(space, newState - 1);
+                    currFlowDirs[index].up = flow;
+                }
+            }
+        }
     }
 
+    //now we're done, update the cell
     cells[index].currentState = newState;
 }
 
+//all this shader does is move the "current" state to the "previous" state, and make the "current" state new (zeroed out)
+[numthreads(64,1,1)]
+void AdvanceFlow (uint3 id : SV_DispatchThreadID)
+{
+    int index = id.x;
+    prevFlowDirs[index].up = currFlowDirs[index].up;
+    prevFlowDirs[index].down = currFlowDirs[index].down;
+    prevFlowDirs[index].left = currFlowDirs[index].left;
+    prevFlowDirs[index].right = currFlowDirs[index].right;
+    currFlowDirs[index].up = 0;
+    currFlowDirs[index].down = 0;
+    currFlowDirs[index].left = 0;
+    currFlowDirs[index].right = 0;
+}

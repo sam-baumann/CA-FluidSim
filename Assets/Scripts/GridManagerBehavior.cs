@@ -4,14 +4,19 @@ using UnityEngine;
 
 /*
 TODO:
- - Add a struct to represent the state of each cell
- - In the update loop, update the state of each cell based on the state of the struct
- - Create compute shader to process the rules of the CA
+ - create a struct in the compute shader that holds the flow information. I don't need this info for visualization, so it can stay in GPU town 
 */
 
 public struct Cell {
     public float previousState;
     public float currentState;
+}
+
+public struct flowDir{
+    public float up;
+    public float down;
+    public float left;
+    public float right;
 }
 
 public class GridManagerBehavior : MonoBehaviour
@@ -32,8 +37,11 @@ public class GridManagerBehavior : MonoBehaviour
     [SerializeField]
     public int cellCountMultiplier = 1;
 
-    int kernel;
+    int automataKernel;
+    int flowKernel;
     ComputeBuffer cellBuffer;
+    ComputeBuffer prevFlowBuffer;
+    ComputeBuffer currFlowBuffer;
     int frameCounter;
 
     // Start is called before the first frame update
@@ -52,10 +60,22 @@ public class GridManagerBehavior : MonoBehaviour
         //create the compute shader and buffer
         cellBuffer = new ComputeBuffer(cellArray.Length, sizeof(float) * 2);
         cellBuffer.SetData(cellArray);
-        computeShader.SetBuffer(0, "cells", cellBuffer);
+
+        //create both flow direction buffers
+        prevFlowBuffer = new ComputeBuffer(cellArray.Length, sizeof(float) * 4);
+        currFlowBuffer = new ComputeBuffer(cellArray.Length, sizeof(float) * 4);
+        prevFlowBuffer.SetData(new flowDir[cellArray.Length]);
+        currFlowBuffer.SetData(new flowDir[cellArray.Length]);
+
+        automataKernel = computeShader.FindKernel("AutomataProcessor");
+        flowKernel = computeShader.FindKernel("AdvanceFlow");
+        computeShader.SetBuffer(automataKernel, "cells", cellBuffer);
+        computeShader.SetBuffer(automataKernel, "prevFlowDirs", prevFlowBuffer);
+        computeShader.SetBuffer(automataKernel, "currFlowDirs", currFlowBuffer);
+        computeShader.SetBuffer(flowKernel, "prevFlowDirs", prevFlowBuffer);
+        computeShader.SetBuffer(flowKernel, "currFlowDirs", currFlowBuffer);
         computeShader.SetInt("width", width);
         computeShader.SetInt("height", height);
-        kernel = computeShader.FindKernel("AutomataProcessor");
 
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++)
@@ -96,9 +116,10 @@ public class GridManagerBehavior : MonoBehaviour
         {
             cellArray[i].previousState = cellArray[i].currentState;
         }
+        computeShader.Dispatch(flowKernel, ((gridSize.x * gridSize.y) + 63) / 64, 1, 1);
         //run the compute shader
         cellBuffer.SetData(cellArray);
-        computeShader.Dispatch(kernel, ((gridSize.x * gridSize.y) + 63) / 64, 1, 1);
+        computeShader.Dispatch(automataKernel, ((gridSize.x * gridSize.y) + 63) / 64, 1, 1);
         cellBuffer.GetData(cellArray);
                 
         //loop over all cells and draw them
@@ -118,5 +139,7 @@ public class GridManagerBehavior : MonoBehaviour
     void OnDestroy()
     {
         cellBuffer.Release();
+        prevFlowBuffer.Release();
+        currFlowBuffer.Release();
     }
 }

@@ -6,12 +6,10 @@ using UnityEngine.SceneManagement;
 public class ClickBehavior : MonoBehaviour
 {
     public SpriteFillBehavior myFillBehavior;
-    public GridManagerBehavior gridManager;
 
     void Start()
     {
         myFillBehavior = GetComponentInChildren<SpriteFillBehavior>();
-        gridManager = transform.parent.GetComponent<GridManagerBehavior>();
     }
 
     void OnMouseDown()
