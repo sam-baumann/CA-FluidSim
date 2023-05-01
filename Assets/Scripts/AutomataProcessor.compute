@@ -25,40 +25,40 @@ RWStructuredBuffer<flowDir> currFlowDirs;
 
 
 float getUp(uint index) {
-    //if it is the top row, return 3
+    //if it is the top row, return 10
     uint y = index / width;
     if (y == height - 1) {
-        return 3;
+        return 10;
     }
 
     return cells[index + width].previousState;
 }
 
 float getDown(uint index) {
-    //if it is the bottom row, return 3
+    //if it is the bottom row, return 10
     uint y = index / width;
     if (y == 0) {
-        return 3;
+        return 10;
     }
 
     return cells[index - width].previousState;
 }
 
 float getLeft(uint index) {
-    //if it is the leftmost column, return 3
+    //if it is the leftmost column, return 10
     int x = index % width;
     if (x == 0) {
-        return 3;
+        return 10;
     }
 
     return cells[index - 1].previousState;
 }
 
 float getRight(uint index) {
-    //if it is the rightmost column, return 3
+    //if it is the rightmost column, return 10
     uint x = index % width;
     if (x == width - 1) {
-        return 3;
+        return 10;
     }
 
     return cells[index + 1].previousState;
@@ -117,9 +117,12 @@ void AutomataProcessor (uint3 id : SV_DispatchThreadID)
     newState += incomingFlow.down;
     newState += incomingFlow.left;
     newState += incomingFlow.right;
+    float nextState = newState;
 
-    //clamp our new state value between 0 and 2
-    newState = clamp(newState, 0, 2);
+    //clamp our new state value between 0 and 5 (allowing for values of 10+ if it's a wall)
+    if (newState < 10) {
+        newState = clamp(newState, 0, 5);
+    }
     
     //get the cell contents in each direction
     float up = getUp(index);
@@ -131,7 +134,7 @@ void AutomataProcessor (uint3 id : SV_DispatchThreadID)
     //first downward flow. If there's space to go down, we do so
     bool flowingLeft;
     bool flowingRight;
-    if (newState > 0){
+    if (newState > 0 && newState < 10){
         if (down < 1) {
             float space = 1 - down;
             float flow = min(space, newState);
@@ -140,34 +143,43 @@ void AutomataProcessor (uint3 id : SV_DispatchThreadID)
             //now we see if we can do sideways flow
             //if we can only go in 1 direction, we'll send about 30% of the cell's contents, or whatever the neighboring cell can take, whichever is smaller
             //if we can go in 2 directions, we'll send about 20% of the cell's contents (each way), or whatever the neighboring cells can take, whichever is smaller
-            flowingLeft = left < newState; 
-            flowingRight = right < newState;
+            float clampedState = clamp(newState, 0, 1);
+            flowingLeft = left < clampedState; 
+            flowingRight = right < clampedState;
             float flowAmount = 0.3;
             if (flowingLeft && flowingRight) {
-                flowAmount = 0.2;
-            }
-            if (flowingLeft) {
-                float space = (newState - left) * flowAmount;
+                flowAmount = 0.15;
+                float leftFlow = (clampedState - left) * flowAmount;
+                float rightFlow = (clampedState - right) * flowAmount;
+                currFlowDirs[index].left = leftFlow;
+                currFlowDirs[index].right = rightFlow;
+            } else if (flowingLeft) {
+                float space = (clampedState - left) * flowAmount;
                 currFlowDirs[index].left = space;
-            }
-            if (flowingRight) {
-                float space = (newState - right) * flowAmount;
+            }else if (flowingRight) {
+                float space = (clampedState - right) * flowAmount;
                 currFlowDirs[index].right = space;
-            }
-            if (!flowingLeft && !flowingRight) {
-                //finally, if we aren't able to go about the other rules, we see if we are overfilled, and if so we try to send some of our contents up.
-                bool overfilled = newState > 1;
-                if (overfilled) {
-                    float space = 1 - up;
-                    float flow = min(space, newState - 1);
-                    currFlowDirs[index].up = flow;
-                }
-            }
+            } 
+        }
+        //now see if we need to go up. subtract all the outward flow that we just calculated to newstate
+        newState -= currFlowDirs[index].down;
+        newState -= currFlowDirs[index].left;
+        newState -= currFlowDirs[index].right;
+        //now if newState is still over 1, we'll try to go up
+        if (newState > 1 && newState < 2) {
+            //try to send 10% of the cell's extra contents up
+            float space = 1 - up;
+            float tryToSend = (newState - 1) * 0.1;
+            float flow = min(space, tryToSend);
+            currFlowDirs[index].up = flow;
+        } else if (newState >= 2) {
+            //if we're this full, we don't really care if there's space, we have to go up anyway. send 10% of the cell's extra contents up
+            currFlowDirs[index].up = (newState - 2) * 0.1;
         }
     }
 
     //now we're done, update the cell
-    cells[index].currentState = newState;
+    cells[index].currentState = nextState;
 }
 
 //all this shader does is move the "current" state to the "previous" state, and make the "current" state new (zeroed out)

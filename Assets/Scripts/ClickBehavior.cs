@@ -12,9 +12,18 @@ public class ClickBehavior : MonoBehaviour
         myFillBehavior = GetComponentInChildren<SpriteFillBehavior>();
     }
 
-    void OnMouseDown()
+    void OnMouseOver()
     {
-        myFillBehavior.fillAmount = 1f;
-        myFillBehavior.hasUpdated = true;
+        if (Input.GetMouseButton(0)){
+            myFillBehavior.fillAmount = 1f;
+            myFillBehavior.hasUpdated = true;
+        } else if (Input.GetMouseButtonDown(1)){
+            if (myFillBehavior.fillAmount == 10f){
+                myFillBehavior.fillAmount = 0f;
+            } else {
+                myFillBehavior.fillAmount = 10f;
+            }
+            myFillBehavior.hasUpdated = true;
+        }
     }
 }

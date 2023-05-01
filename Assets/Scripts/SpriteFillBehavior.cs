@@ -32,5 +32,16 @@ public class SpriteFillBehavior : MonoBehaviour
         //update the sprite's transform to match the fill amount (and adust it up or down by that much)
         transform.localScale = new Vector3(1, adjustedFillAmount, 1);
         transform.localPosition = new Vector3(0, (adjustedFillAmount - 1) / 2, 0);
+
+        //now update the color
+        //first get the sprite renderer
+        SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
+        //now if it's less than or equal to 1, set it to our blue color
+        if (fillAmount <= 9.9)
+        {
+            spriteRenderer.color = new Color32(0, 162, 255, 255);
+        } else if (fillAmount <= 10){
+            spriteRenderer.color = new Color(0, 0, 0);
+        }
     }
 }

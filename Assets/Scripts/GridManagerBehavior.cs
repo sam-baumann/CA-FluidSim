@@ -96,7 +96,7 @@ public class GridManagerBehavior : MonoBehaviour
                 //create a new cell struct
                 Cell newCell = new Cell();
                 //set the previous state to 0
-                newCell.previousState = 1;
+                newCell.previousState = 0;
                 //set the current state to 0
                 newCell.currentState = 0;
                 //add that cell to the cell array
