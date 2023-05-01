@@ -146,9 +146,9 @@ void AutomataProcessor (uint3 id : SV_DispatchThreadID)
             float clampedState = clamp(newState, 0, 1);
             flowingLeft = left < clampedState; 
             flowingRight = right < clampedState;
-            float flowAmount = 0.3;
+            float flowAmount = 0.50;
             if (flowingLeft && flowingRight) {
-                flowAmount = 0.15;
+                flowAmount = 0.25;
                 float leftFlow = (clampedState - left) * flowAmount;
                 float rightFlow = (clampedState - right) * flowAmount;
                 currFlowDirs[index].left = leftFlow;

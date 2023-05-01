@@ -29,6 +29,15 @@ public class SpriteFillBehavior : MonoBehaviour
         //if fill amount is over 1, set it to 1
         float adjustedFillAmount = fillAmount;
         if (adjustedFillAmount > 1) adjustedFillAmount = 1;
+        //now check the cell above. If it has any content, adjust the fill amount to 1
+        if (cellPosition.y < gridManager.gridSize.y - 1 && adjustedFillAmount < 1 && adjustedFillAmount > 0)
+        {
+            float aboveState = gridManager.cellArray[cellPosition.x + (cellPosition.y + 1) * gridManager.gridSize.x].currentState;
+            if (aboveState > 0 && aboveState < 10)
+            {
+                adjustedFillAmount = 1;
+            }
+        }
         //update the sprite's transform to match the fill amount (and adust it up or down by that much)
         transform.localScale = new Vector3(1, adjustedFillAmount, 1);
         transform.localPosition = new Vector3(0, (adjustedFillAmount - 1) / 2, 0);
