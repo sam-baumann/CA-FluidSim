@@ -123,18 +123,25 @@ void AutomataProcessor (uint3 id : SV_DispatchThreadID)
     if (newState < 10) {
         newState = clamp(newState, 0, 5);
     }
-    
-    //get the cell contents in each direction
-    float up = getUp(index);
-    float down = getDown(index);
-    float left = getLeft(index);
-    float right = getRight(index);
 
-    //now apply our automata rules
-    //first downward flow. If there's space to go down, we do so
-    bool flowingLeft;
-    bool flowingRight;
+    //if the cell is below some epsilon, adjust it to 0
+    if (newState < 0.01) {
+        newState = 0;
+        nextState = 0;
+    }
+    
+    
     if (newState > 0 && newState < 10){
+        //get the cell contents in each direction
+        float up = getUp(index);
+        float down = getDown(index);
+        float left = getLeft(index);
+        float right = getRight(index);
+
+        //now apply our automata rules
+        //first downward flow. If there's space to go down, we do so
+        bool flowingLeft;
+        bool flowingRight;
         if (down < 1) {
             float space = 1 - down;
             float flow = min(space, newState);

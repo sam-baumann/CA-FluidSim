@@ -30,7 +30,7 @@ public class SpriteFillBehavior : MonoBehaviour
         float adjustedFillAmount = fillAmount;
         if (adjustedFillAmount > 1) adjustedFillAmount = 1;
         //now check the cell above. If it has any content, adjust the fill amount to 1
-        if (cellPosition.y < gridManager.gridSize.y - 1 && adjustedFillAmount < 1 && adjustedFillAmount > 0)
+        if (cellPosition.y < gridManager.gridSize.y - 1 && adjustedFillAmount < 10 && adjustedFillAmount > 0)
         {
             float aboveState = gridManager.cellArray[cellPosition.x + (cellPosition.y + 1) * gridManager.gridSize.x].currentState;
             if (aboveState > 0 && aboveState < 10)
@@ -46,9 +46,12 @@ public class SpriteFillBehavior : MonoBehaviour
         //first get the sprite renderer
         SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
         //now if it's less than or equal to 1, set it to our blue color
-        if (fillAmount <= 9.9)
+        if (fillAmount <= 1)
         {
             spriteRenderer.color = new Color32(0, 162, 255, 255);
+        } else if (fillAmount <= 5){
+            //lerp between our previous blue and a darker blue
+            spriteRenderer.color = Color32.Lerp(new Color32(0, 162, 255, 255), new Color32(0, 0, 255, 255), (fillAmount - 1) / 4);
         } else if (fillAmount <= 10){
             spriteRenderer.color = new Color(0, 0, 0);
         }
